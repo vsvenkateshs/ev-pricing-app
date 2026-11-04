@@ -33,13 +33,13 @@ class StationResponse(StationCreate):
         from_attributes = True
 
 class MarketParamsSchema(BaseModel):
-    L: float
-    rho: float
-    mu1: float
-    sigma: float
-    C_min: float
-    C_max: float
-    Cw: float
+    L: float = 12.0
+    rho: float = 50.0
+    mu1: float = 60.0
+    sigma: float = 5.77
+    C_min: float = 0.5
+    C_max: float = 1.5
+    Cw: float = 4.0
     class Config:
         from_attributes = True
 

@@ -38,7 +38,10 @@ def get_public_stations(db: Session = Depends(get_db)):
 def get_market_params(db: Session = Depends(get_db)):
     params = db.query(models.MarketParams).first()
     if not params:
-        params = models.MarketParams()
+        params = models.MarketParams(
+            L=12.0, rho=50.0, mu1=60.0, sigma=5.77,
+            C_min=0.5, C_max=1.5, Cw=4.0
+        )
         db.add(params)
         db.commit()
         db.refresh(params)
@@ -55,22 +58,30 @@ def run_pricing(
     
     market = get_market_params(db)
     mp_dict = {
-        "rho": market.rho, "mu1": market.mu1, "sigma": market.sigma,
-        "C_min": market.C_min, "C_max": market.C_max, "Cw": market.Cw
+        "rho": market.rho,
+        "mu1": market.mu1,
+        "sigma": market.sigma,
+        "C_min": market.C_min,
+        "C_max": market.C_max,
+        "Cw": market.Cw
     }
     
     st_input = [
         {
-            "id": s.id, "location_km": s.location_km, "eta": s.energy_cost_eta,
-            "wait_hr": s.expected_wait_hr, "terminal_cost": s.terminal_cost
+            "id": s.id,
+            "name": s.name,
+            "location_km": s.location_km,
+            "eta": s.energy_cost_eta,
+            "wait_hr": s.expected_wait_hr,
+            "terminal_cost": s.terminal_cost
         }
         for s in stations
     ]
     
-    sorted_st, prices, profits = solve_nash(market.L, st_input, mp_dict)
+    sorted_st, prices, profits, demand_lengths, valid_market = solve_nash(market.L, st_input, mp_dict)
     
     output = []
-    for s_dict, p, prof in zip(sorted_st, prices, profits):
+    for s_dict, p, prof, psi in zip(sorted_st, prices, profits, demand_lengths):
         st_obj = db.query(models.Station).filter(models.Station.id == s_dict["id"]).first()
         st_obj.published_price = round(p, 4)
         
@@ -79,13 +90,20 @@ def run_pricing(
         )
         db.add(run_record)
         output.append({
-            "station_id": st_obj.id, "name": st_obj.name,
-            "location_km": st_obj.location_km, "ne_price": round(p, 4),
-            "ne_profit": round(prof, 2)
+            "station_id": st_obj.id,
+            "name": st_obj.name,
+            "location_km": st_obj.location_km,
+            "ne_price": round(p, 4),
+            "ne_profit": round(prof, 2),
+            "demand_length_km": round(psi, 2)
         })
     
     db.commit()
-    return {"status": "success", "results": output}
+    return {
+        "status": "success",
+        "market_sharing_valid": valid_market,
+        "results": output
+    }
 
 @router.post("/ev/recommend")
 def recommend_station(req: schemas.EVSelectionRequest, db: Session = Depends(get_db)):
@@ -95,11 +113,42 @@ def recommend_station(req: schemas.EVSelectionRequest, db: Session = Depends(get
     
     st_input = [
         {
-            "id": s.id, "name": s.name, "location_km": s.location_km,
-            "price": s.published_price, "eta": s.energy_cost_eta, "wait_hr": s.expected_wait_hr
+            "id": s.id,
+            "name": s.name,
+            "location_km": s.location_km,
+            "price": s.published_price,
+            "eta": s.energy_cost_eta,
+            "wait_hr": s.expected_wait_hr
         }
         for s in stations
     ]
     
     rankings = select_station(req.dict(), st_input)
     return {"ev_request": req.dict(), "rankings": rankings}
+
+@router.delete("/stations/{station_id}")
+def delete_station(
+    station_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.require_role("station_owner"))
+):
+    # Find station belonging to the current logged-in owner
+    station = db.query(models.Station).filter(
+        models.Station.id == station_id,
+        models.Station.owner_id == user.id
+    ).first()
+
+    if not station:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Station not found or you do not have permission to delete it"
+        )
+
+    # Delete related equilibrium runs first to avoid foreign key constraints
+    db.query(models.EquilibriumRun).filter(models.EquilibriumRun.station_id == station_id).delete()
+
+    # Delete the station
+    db.delete(station)
+    db.commit()
+
+    return {"status": "success", "message": f"Station {station_id} deleted successfully"}
