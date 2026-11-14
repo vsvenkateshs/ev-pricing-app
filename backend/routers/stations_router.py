@@ -45,7 +45,7 @@ def get_market_params(db: Session = Depends(get_db)):
     params = db.query(models.MarketParams).first()
     if not params:
         params = models.MarketParams(
-            L=12.0, rho=50.0, mu1=60.0, sigma=5.77,
+            L=60.0, rho=50.0, mu1=60.0, sigma=5.77,
             C_min=0.5, C_max=1.5, Cw=4.0
         )
         db.add(params)
