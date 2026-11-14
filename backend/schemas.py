@@ -1,10 +1,17 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: str
+
+    @field_validator("role")
+    @classmethod
+    def role_must_be_valid(cls, v: str) -> str:
+        if v not in ("station_owner", "ev_owner"):
+            raise ValueError("role must be 'station_owner' or 'ev_owner'")
+        return v
 
 class UserResponse(BaseModel):
     id: int

@@ -17,7 +17,13 @@ def create_station(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.require_role("station_owner"))
 ):
-    station = models.Station(**station_data.dict(), owner_id=user.id)
+    market = get_market_params(db)
+    if not (0 <= station_data.location_km <= market.L):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Station location must be between 0 and {market.L} km (highway length)",
+        )
+    station = models.Station(**station_data.model_dump(), owner_id=user.id)
     db.add(station)
     db.commit()
     db.refresh(station)
@@ -78,7 +84,10 @@ def run_pricing(
         for s in stations
     ]
     
-    sorted_st, prices, profits, demand_lengths, valid_market = solve_nash(market.L, st_input, mp_dict)
+    try:
+        sorted_st, prices, profits, demand_lengths, valid_market = solve_nash(market.L, st_input, mp_dict)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     
     output = []
     for s_dict, p, prof, psi in zip(sorted_st, prices, profits, demand_lengths):
@@ -123,8 +132,8 @@ def recommend_station(req: schemas.EVSelectionRequest, db: Session = Depends(get
         for s in stations
     ]
     
-    rankings = select_station(req.dict(), st_input)
-    return {"ev_request": req.dict(), "rankings": rankings}
+    rankings = select_station(req.model_dump(), st_input)
+    return {"ev_request": req.model_dump(), "rankings": rankings}
 
 @router.delete("/stations/{station_id}")
 def delete_station(

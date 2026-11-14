@@ -118,10 +118,11 @@ export default function StationDashboard() {
               <LineChart data={results}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="location_km" stroke="#94a3b8" label={{ value: 'Highway Location (km)', position: 'insideBottom', offset: -5 }} />
-                <YAxis stroke="#94a3b8" />
+                <YAxis yAxisId="price" stroke="#38bdf8" domain={['auto', 'auto']} />
+                <YAxis yAxisId="profit" orientation="right" stroke="#22c55e" domain={['auto', 'auto']} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }} />
-                <Line type="monotone" dataKey="ne_price" name="Equilibrium Price ($)" stroke="#38bdf8" strokeWidth={3} />
-                <Line type="monotone" dataKey="ne_profit" name="Predicted Profit ($)" stroke="#22c55e" strokeWidth={3} />
+                <Line yAxisId="price" type="monotone" dataKey="ne_price" name="Equilibrium Price ($/kWh)" stroke="#38bdf8" strokeWidth={3} />
+                <Line yAxisId="profit" type="monotone" dataKey="ne_profit" name="Predicted Profit ($)" stroke="#22c55e" strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
           </div>
